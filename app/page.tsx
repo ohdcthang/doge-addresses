@@ -1,112 +1,150 @@
-import Image from "next/image";
+'use client'
+import * as ecc from '@bitcoinerlab/secp256k1'
+import { BIP32Factory } from 'bip32'
+import { Network, payments } from 'bitcoinjs-lib'
+import { useState } from 'react'
+const { HDKey } = require('ethereum-cryptography/hdkey')
+
+const bip32 = BIP32Factory(ecc)
+
+const networkDogecoin = {
+  messagePrefix: '\x19Dogecoin Signed Message:\n',
+  bip32: {
+    public: 0x02facafd,
+    private: 0x02fac398
+  },
+  pubKeyHash: 0x1e,
+  scriptHash: 0x16,
+  wif: 0x9e
+}
+
+const to = 2048
+const from = 0
+
+
 
 export default function Home() {
+  const [addresses, setAddresses] = useState<any>({})
+  const [loading, setLoading] = useState(false)
+
+  const addressFromPublicKeyDogecoin = (publicKey: Buffer) => {
+    // return payments.p2pkh({ pubkey: Buffer.from(publicKey), network: networkBitcoin }).address
+    const account = payments.p2pkh({ pubkey: Buffer.from(publicKey), network: networkDogecoin as Network })
+    return account
+  }
+
+  const createAddress = (xpub: string, type: number) => {
+    if(xpub.includes('dgub')){
+      const node = bip32.fromBase58(xpub, networkDogecoin)
+      let listAddress: any = Array.from({ length: (to - from) }, (_, i) => i + from)
+    
+      const path = 'm/44\'/3\'/0\''
+
+      
+      listAddress = listAddress.map((item: any) => {
+        const child = node.derivePath(type.toString()).derive(item)
+        const { address, output = '', pubkey = '' } = addressFromPublicKeyDogecoin(child.publicKey)
+        return {
+          address,
+          path: `${path}/${type}/${item}`,
+          publicKey: Buffer.from(pubkey).toString('hex'),
+          output: Buffer.from(output).toString('hex')
+        }
+      })
+
+
+      return listAddress
+    }else{
+      const masterKey = HDKey.fromExtendedKey(xpub)
+
+      const childHdkey = HDKey.fromExtendedKey(masterKey.deriveChild(type).publicExtendedKey)
+  
+      let listAddress: any = Array.from({ length: (to - from) }, (_, i) => i + from)
+
+      const path = 'm/44\'/3\'/0\''
+
+
+      listAddress = listAddress.map((item: any) => {
+        const accountIndex = childHdkey.deriveChild(item)
+    
+        const { address, output = '', pubkey = '' } = addressFromPublicKeyDogecoin(accountIndex.publicKey as Buffer)
+        return {
+          address: address,
+          path: `${path}/${type}/${item}`,
+          publicKey: Buffer.from(pubkey).toString('hex'),
+          output: Buffer.from(output).toString('hex')
+        }
+      })
+      return listAddress
+    }
+  }
+  
+  const generateAddress = (xpub: string) => {
+    try{
+      let listAddressExternal = createAddress(xpub, 0)
+      let listAddressInternal = createAddress(xpub, 1)
+      
+      return {
+        listAddressExternal,
+        listAddressInternal
+      }
+    }catch(e){
+      return {}
+    }
+  }
+
+  const onChangeXpub = (e: any) => {
+    e.preventDefault()
+    const addresses =  generateAddress(e.target.value)
+
+    setAddresses(addresses)
+    setLoading(false)
+  }
+
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <main className="flex min-h-screen flex-col items-center justify-between p-12 h-screen">
+      <h1 style={{ fontFamily: "DM Serif Display" }} className='text-[77px]'>DOGE ADDRESSES</h1>
+      <div className="z-100 text-black">
+        <input  onChange={e => onChangeXpub(e)} type="text" className="border-none outline-none w-[500px] px-8 py-2 rounded-2xl" placeholder="Doge master public key"/>
+      </div>
+      <div className="grid grid-cols-2 gap-4 text-center mt-4">
+        <div>
+          <h1 className="text-center p-4 text-3xl" style={{ fontFamily: "DM Serif Display" }}>External addressess</h1>
+        </div>
+        <div>
+          <h1 className="text-center p-4 text-3xl" style={{ fontFamily: "DM Serif Display" }}>Internal addressess</h1>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4 p-4 h-5/6 overflow-scroll">
+        <div>
+          {addresses && (
+            addresses?.listAddressExternal?.map((addr: any) => {
+                return (
+                  <div >
+                    <span className="px-2 text-yellow-500">{addr.address}</span>
+                    <span className='text-gray-500'>{addr.path}</span>
+                  </div>
+                )
+            } )
+          )}
+        </div>
+        <div className="text-center">
+        {addresses && (
+            addresses?.listAddressInternal?.map((addr: any) => {
+                return (
+                  <div >
+                    <span className="px-2 text-yellow-500">{addr.address}</span>
+                    <span className='text-gray-500'>{addr.path}</span>
+                  </div>
+                )
+            } )
+          )}
         </div>
       </div>
 
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
+      <div className="text-center mt-8">
+        Powered by Victoria xảo quyệt
       </div>
     </main>
   );
