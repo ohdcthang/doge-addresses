@@ -121,7 +121,7 @@ export default function Home() {
           {addresses && (
             addresses?.listAddressExternal?.map((addr: any) => {
                 return (
-                  <div >
+                  <div key={addr.address}>
                     <span className="px-2 text-yellow-500">{addr.address}</span>
                     <span className='text-gray-500'>{addr.path}</span>
                   </div>
@@ -133,7 +133,7 @@ export default function Home() {
         {addresses && (
             addresses?.listAddressInternal?.map((addr: any) => {
                 return (
-                  <div >
+                  <div key={addr.address}>
                     <span className="px-2 text-yellow-500">{addr.address}</span>
                     <span className='text-gray-500'>{addr.path}</span>
                   </div>
